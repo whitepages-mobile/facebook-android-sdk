@@ -1,0 +1,130 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:0.9.+'
+        classpath 'org.ajoberstar:gradle-git:0.6.+'
+    }
+}
+
+apply plugin: 'android-library'
+apply plugin: 'maven'
+apply plugin: 'signing'
+
+def isReleaseBuild() {
+    return version.contains("SNAPSHOT") == false
+}
+
+import org.ajoberstar.gradle.git.tasks.GitTag
+import org.ajoberstar.gradle.git.tasks.GitPush
+
+ext.releaseTag = "v${VERSION_NAME}"
+
+task createTag(type: GitTag) {
+    repoPath = rootDir
+    tagName = releaseTag.toString()
+    message = "Release version ${VERSION_NAME}"
+}
+
+task pushTag(type: GitPush, dependsOn: createTag) {
+    namesOrSpecs = [releaseTag.toString()]
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile 'com.android.support:support-v4:18.0.0'
+}
+
+android {
+    compileSdkVersion 17
+    buildToolsVersion '19.0.0'
+
+    defaultConfig {
+        minSdkVersion 8
+        targetSdkVersion 17
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'facebook/AndroidManifest.xml'
+            java.srcDirs = ['facebook/src']
+            resources.srcDirs = ['src']
+            aidl.srcDirs = ['facebook/src']
+            renderscript.srcDirs = ['facebook/src']
+            res.srcDirs = ['facebook/res']
+            assets.srcDirs = ['facebook/assets']
+        }
+    }
+}
+
+allprojects {
+    version = VERSION_NAME
+    group = GROUP
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+afterEvaluate { project ->
+    uploadArchives {
+        repositories {
+            mavenDeployer {
+                beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+                pom.artifactId = POM_ARTIFACT_ID
+                pom.groupId = GROUP
+                pom.version = VERSION_NAME
+
+                repository(url: "http://jrepo0.util.pages:8081/artifactory/wp-mobile-release") {
+                    authentication(userName: wpArtifactoryDevUsername, password: wpArtifactoryDevPassword)
+                }
+
+                snapshotRepository(url: "http://jrepo0.dev.pages:8081/artifactory/wp-mobile-snapshots") {
+                    authentication(userName: wpArtifactoryDevUsername, password: wpArtifactoryDevPassword)
+                }
+
+                pom.project {
+                    name POM_NAME
+                    packaging POM_PACKAGING
+                    description POM_DESCRIPTION
+                    url POM_URL
+
+                    scm {
+                        url POM_SCM_URL
+                        connection POM_SCM_CONNECTION
+                        developerConnection POM_SCM_DEV_CONNECTION
+                    }
+                }
+            }
+        }
+    }
+
+    signing {
+        required { isReleaseBuild() && gradle.taskGraph.hasTask("uploadArchives") }
+        sign configurations.archives
+    }
+
+    task androidSourcesJar(type: Jar) {
+        classifier = 'sources'
+        from android.sourceSets.main.allSource
+    }
+
+    task androidJavadocs(type: Javadoc) {
+        source = android.sourceSets.main.allJava
+    }
+
+    task androidJavadocsJar(type: Jar) {
+        classifier = 'javadoc'
+        from androidJavadocs.destinationDir
+    }
+
+    artifacts {
+        archives androidSourcesJar
+        archives androidJavadocsJar
+    }
+}
