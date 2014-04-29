@@ -22,6 +22,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.provider.Settings.Secure;
 import android.text.TextUtils;
 import android.util.Log;
 import android.webkit.CookieManager;
@@ -35,6 +36,8 @@ import org.json.JSONObject;
 import org.json.JSONTokener;
 
 import java.io.*;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.HttpURLConnection;
 import java.net.URLConnection;
 import java.security.MessageDigest;
@@ -50,6 +53,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class Utility {
     static final String LOG_TAG = "FacebookSDK";
     private static final String HASH_ALGORITHM_MD5 = "MD5";
+    private static final String HASH_ALGORITHM_SHA1 = "SHA-1";
     private static final String URL_SCHEME = "https";
     private static final String SUPPORTS_ATTRIBUTION = "supports_attribution";
     private static final String SUPPORTS_IMPLICIT_SDK_LOGGING = "supports_implicit_sdk_logging";
@@ -121,9 +125,17 @@ public final class Utility {
     }
 
     static String md5hash(String key) {
+        return hashWithAlgorithm(HASH_ALGORITHM_MD5, key);
+    }
+
+    private static String sha1hash(String key) {
+        return hashWithAlgorithm(HASH_ALGORITHM_SHA1, key);
+    }
+
+    private static String hashWithAlgorithm(String algorithm, String key) {
         MessageDigest hash = null;
         try {
-            hash = MessageDigest.getInstance(HASH_ALGORITHM_MD5);
+            hash = MessageDigest.getInstance(algorithm);
         } catch (NoSuchAlgorithmException e) {
             return null;
         }
@@ -392,5 +404,63 @@ public final class Utility {
             }
         }
         return result;
+    }
+
+    // Return a hash of the android_id combined with the appid.  Intended to dedupe requests on the server side
+    // in order to do counting of users unknown to Facebook.  Because we put the appid into the key prior to hashing,
+    // we cannot do correlation of the same user across multiple apps -- this is intentional.  When we transition to
+    // the Google advertising ID, we'll get rid of this and always send that up.
+    public static String getHashedDeviceAndAppID(Context context, String applicationId) {
+        String androidId = Secure.getString(context.getContentResolver(), Secure.ANDROID_ID);
+
+        if (androidId == null) {
+            return null;
+        } else {
+            return sha1hash(androidId + applicationId);
+        }
+    }
+
+    public static void setAppEventAttributionParameters(GraphObject params,
+            AttributionIdentifiers attributionIdentifiers, String hashedDeviceAndAppId, boolean limitEventUsage) {
+        // Send attributionID if it exists, otherwise send a hashed device+appid specific value as the advertiser_id.
+        if (attributionIdentifiers.getAttributionId() != null) {
+            params.setProperty("attribution", attributionIdentifiers.getAttributionId());
+        }
+
+        if (attributionIdentifiers.getAndroidAdvertiserId() != null) {
+            params.setProperty("advertiser_id", attributionIdentifiers.getAndroidAdvertiserId());
+            params.setProperty("advertiser_tracking_enabled", !attributionIdentifiers.isTrackingLimited());
+        } else if (hashedDeviceAndAppId != null) {
+            params.setProperty("advertiser_id", hashedDeviceAndAppId);
+        }
+
+        params.setProperty("application_tracking_enabled", !limitEventUsage);
+    }
+
+    public static Method getMethodQuietly(Class<?> clazz, String methodName, Class<?>... parameterTypes) {
+        try {
+            return clazz.getMethod(methodName, parameterTypes);
+        } catch (NoSuchMethodException ex) {
+            return null;
+        }
+    }
+
+    public static Method getMethodQuietly(String className, String methodName, Class<?>... parameterTypes) {
+        try {
+            Class<?> clazz = Class.forName(className);
+            return getMethodQuietly(clazz, methodName, parameterTypes);
+        } catch (ClassNotFoundException ex) {
+            return null;
+        }
+    }
+
+    public static Object invokeMethodQuietly(Object receiver, Method method, Object... args) {
+        try {
+            return method.invoke(receiver, args);
+        } catch (IllegalAccessException ex) {
+            return null;
+        } catch (InvocationTargetException ex) {
+            return null;
+        }
     }
 }
