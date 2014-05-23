@@ -36,7 +36,7 @@ repositories {
 }
 
 dependencies {
-    compile 'com.android.support:support-v4:18.0.0'
+   compile 'com.android.support:support-v13:18.0.+'
 }
 
 android {
@@ -80,11 +80,11 @@ afterEvaluate { project ->
                 pom.groupId = GROUP
                 pom.version = VERSION_NAME
 
-                repository(url: "http://jrepo0.util.pages:8081/artifactory/wp-mobile-release") {
+                repository(url: "http://localhost:8081/artifactory/nameid-release") {
                     authentication(userName: wpArtifactoryDevUsername, password: wpArtifactoryDevPassword)
                 }
 
-                snapshotRepository(url: "http://jrepo0.dev.pages:8081/artifactory/wp-mobile-snapshots") {
+                snapshotRepository(url: "http://localhost:8081/artifactory/nameid-release") {
                     authentication(userName: wpArtifactoryDevUsername, password: wpArtifactoryDevPassword)
                 }
 

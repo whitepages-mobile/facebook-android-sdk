@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merger>
+
+    <dataSet config="main" >
+        <source path="/Users/mbelford/mobile/cadbury/facebook-android-sdk/facebook/assets" />
+    </dataSet>
+    <dataSet config="debug" >
+        <source path="/Users/mbelford/mobile/cadbury/facebook-android-sdk/src/debug/assets" />
+    </dataSet>
+
+</merger>
